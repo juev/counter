@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option go_package = "github.com/juev/counter/counter";
+
+package counter;
+
+// Interface exported by the server.
+service Counter {
+  // Adding domain to service
+  rpc AddDomain(Domain) returns (Response) {}
+
+  // Remove domain from service
+  rpc RemoveDomain(Domain) returns (Response) {}
+
+  // Get stats from domain
+  rpc GetStat(Domain) returns (Stats) {}
+}
+
+message Response {
+  string status = 1;
+}
+
+message Domain {
+  string domain = 1;
+}
+
+message Stats {
+  int64 cnt = 1;
+}
