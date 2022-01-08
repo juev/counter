@@ -18,7 +18,7 @@ import (
 
 var (
 	rdb       *redis.Client
-	port      = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
+	portGrpc  = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
 	portFiber = kingpin.Flag("http", "The HTTP port").Default("50052").Int()
 )
 
@@ -128,7 +128,7 @@ func runFiber(ctx context.Context, port int) {
 		}
 
 		val := rdb.Incr(ctx, id)
-		return c.JSON(fiber.Map{"Data": val.Val()})
+		return c.JSON(fiber.Map{id: val.Val()})
 	})
 
 	err := appFiber.Listen(fmt.Sprintf("127.0.0.1:%d", port))
@@ -145,9 +145,10 @@ func runGrpc(port int) {
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterCounterServer(grpcServer, newCounterServer())
+	log.Printf("grpc is running on port: %d", port)
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		return
+		log.Fatalf("failed to start grpc: %v", err)
 	}
 }
 
@@ -157,6 +158,6 @@ func main() {
 	ctx := context.Background()
 
 	initRedis(ctx)
-	go runFiber(ctx, *portFiber)
-	runGrpc(*port)
+	go runGrpc(*portGrpc)
+	runFiber(ctx, *portFiber)
 }
