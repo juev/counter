@@ -123,21 +123,12 @@ func runFiber(ctx context.Context, port int) {
 	appFiber.Get("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 
-		val, err := getValue(ctx, id)
-		if err != nil {
-			rdb.Incr(ctx, "any")
-			val, err := getValue(ctx, "any")
-			if err != nil {
-				return err
-			}
-			return c.JSON(fiber.Map{"Data": val})
+		if !keyExist(ctx, id) {
+			id = "any"
 		}
-		rdb.Incr(ctx, id)
-		val, err = getValue(ctx, id)
-		if err != nil {
-			return err
-		}
-		return c.JSON(fiber.Map{"Data": val})
+
+		val := rdb.Incr(ctx, id)
+		return c.JSON(fiber.Map{"Data": val.Val()})
 	})
 
 	err := appFiber.Listen(fmt.Sprintf("127.0.0.1:%d", port))
