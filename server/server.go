@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"flag"
 	"fmt"
 	"log"
 	"math/big"
@@ -11,13 +10,16 @@ import (
 	"strconv"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v2"
 	pb "github.com/juev/counter/proto/counter"
 	"google.golang.org/grpc"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	rdb  *redis.Client
-	port = flag.Int("port", 50051, "The server port")
+	rdb       *redis.Client
+	port      = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
+	portFiber = kingpin.Flag("http", "The HTTP port").Default("50052").Int()
 )
 
 type Implementation struct {
@@ -115,13 +117,37 @@ func keyExist(ctx context.Context, key string) bool {
 	return false
 }
 
-func main() {
-	ctx := context.Background()
+func runFiber(ctx context.Context, port int) {
+	appFiber := fiber.New()
 
-	initRedis(ctx)
+	appFiber.Get("/:id", func(c *fiber.Ctx) error {
+		id := c.Params("id")
 
-	flag.Parse()
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
+		val, err := getValue(ctx, id)
+		if err != nil {
+			rdb.Incr(ctx, "any")
+			val, err := getValue(ctx, "any")
+			if err != nil {
+				return err
+			}
+			return c.JSON(fiber.Map{"Data": val})
+		}
+		rdb.Incr(ctx, id)
+		val, err = getValue(ctx, id)
+		if err != nil {
+			return err
+		}
+		return c.JSON(fiber.Map{"Data": val})
+	})
+
+	err := appFiber.Listen(fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		log.Fatalf("error on handle: %v", err)
+	}
+}
+
+func runGrpc(port int) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -132,4 +158,14 @@ func main() {
 	if err != nil {
 		return
 	}
+}
+
+func main() {
+	kingpin.Parse()
+
+	ctx := context.Background()
+
+	initRedis(ctx)
+	go runFiber(ctx, *portFiber)
+	runGrpc(*port)
 }
