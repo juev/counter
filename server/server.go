@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"strconv"
 
@@ -24,18 +26,38 @@ type Implementation struct {
 
 func (s *Implementation) AddDomain(ctx context.Context, domain *pb.Domain) (*pb.Response, error) {
 	if !keyExist(ctx, domain.GetDomain()) {
-		err := rdb.Set(ctx, domain.Domain, 0, 0).Err()
+		var index *big.Int
+		for {
+			index, _ := rand.Prime(rand.Reader, 64)
+			if !keyExist(ctx, index.String()) {
+				break
+			}
+		}
+		err := rdb.Set(ctx, domain.Domain, index, 0).Err()
+		if err != nil {
+			return nil, err
+		}
+		err = rdb.Set(ctx, index.String(), 0, 0).Err()
 		if err != nil {
 			return nil, err
 		}
 		return &pb.Response{
-			Status: `ok`,
+			Status: index.String(),
 		}, nil
 	}
-	return &pb.Response{Status: `domain already exist`}, nil
+	index, err := getValue(ctx, domain.GetDomain())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Response{Status: strconv.FormatInt(index, 10)}, nil
 }
 
 func (s *Implementation) RemoveDomain(ctx context.Context, domain *pb.Domain) (*pb.Response, error) {
+	index, err := getValue(ctx, domain.GetDomain())
+	if err != nil {
+		return nil, err
+	}
+	rdb.Del(ctx, strconv.FormatInt(index, 10))
 	rdb.Del(ctx, domain.GetDomain())
 	return &pb.Response{
 		Status: `domain deleted`,
@@ -43,20 +65,27 @@ func (s *Implementation) RemoveDomain(ctx context.Context, domain *pb.Domain) (*
 }
 
 func (s *Implementation) GetStat(ctx context.Context, domain *pb.Domain) (*pb.Stats, error) {
-	if keyExist(ctx, domain.GetDomain()) {
-		val, err := rdb.Get(ctx, domain.GetDomain()).Result()
-		switch {
-		case err == redis.Nil:
-			return &pb.Stats{Cnt: 0}, nil
-		case err != nil:
-			log.Fatalf("cannot get `%s` key: %v", domain.GetDomain(), err)
-		default:
-			result, _ := strconv.Atoi(val)
-			return &pb.Stats{Cnt: int64(result)}, nil
-		}
+	index, err := getValue(ctx, domain.GetDomain())
+	if err != nil {
+		return nil, err
 	}
-	log.Println("Get request /stats")
-	return &(pb.Stats{Cnt: 1}), nil
+
+	val, err := getValue(ctx, strconv.FormatInt(index, 10))
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.Stats{
+		Cnt: val,
+	}, nil
+}
+
+func getValue(ctx context.Context, key string) (int64, error) {
+	val, err := rdb.Get(ctx, key).Int64()
+	if err != nil {
+		return 0, fmt.Errorf("cannot get `%s` key: %v", key, err)
+	}
+	return val, nil
 }
 
 func newCounterServer() *Implementation {
@@ -80,12 +109,7 @@ func initRedis(ctx context.Context) {
 
 func keyExist(ctx context.Context, key string) bool {
 	_, err := rdb.Get(ctx, key).Result()
-	switch {
-	case err == redis.Nil:
-		return false
-	case err != nil:
-		log.Fatalf("cannot get `%s` key: %v", key, err)
-	default:
+	if err == nil || err != redis.Nil {
 		return true
 	}
 	return false
