@@ -59,12 +59,6 @@ func initClient() pb.CounterClient {
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
-	defer func(conn *grpc.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Fatalf("Cannot close grpc connection")
-		}
-	}(conn)
 
 	return pb.NewCounterClient(conn)
 }
