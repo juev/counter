@@ -14,7 +14,7 @@ import (
 
 var (
 	app                 = kingpin.New("client", "Client for counter")
-	serverAddr          = app.Flag("addr", "The server address in the format of host:port").Default("localhost:50051").String()
+	serverAddr          = app.Flag("addr", "The server address in the format of host:port").Default("127.0.0.1:50051").String()
 	addDomainCommand    = app.Command("add", "Add domain to counter")
 	addDomainArg        = addDomainCommand.Arg("domain", "Domain name").Required().String()
 	removeDomainCommand = app.Command("remove", "Remove domain from counter")
@@ -23,7 +23,8 @@ var (
 	statArg             = statCommand.Arg("domain", "Domain for stats").Required().String()
 )
 
-func getStats(ctx context.Context, client pb.CounterClient, domain string) (*pb.Stats, error) {
+func getStats(ctx context.Context, domain string) (*pb.Stats, error) {
+	client := initClient()
 	response, err := client.GetStat(ctx, &pb.Domain{Domain: domain})
 
 	if err != nil {
@@ -32,7 +33,8 @@ func getStats(ctx context.Context, client pb.CounterClient, domain string) (*pb.
 	return response, nil
 }
 
-func addDomain(ctx context.Context, client pb.CounterClient, domain string) (*pb.Response, error) {
+func addDomain(ctx context.Context, domain string) (*pb.Response, error) {
+	client := initClient()
 	response, err := client.AddDomain(ctx, &pb.Domain{Domain: domain})
 	if err != nil {
 		return nil, err
@@ -40,7 +42,8 @@ func addDomain(ctx context.Context, client pb.CounterClient, domain string) (*pb
 	return response, nil
 }
 
-func removeDomain(ctx context.Context, client pb.CounterClient, domain string) (*pb.Response, error) {
+func removeDomain(ctx context.Context, domain string) (*pb.Response, error) {
+	client := initClient()
 	response, err := client.RemoveDomain(ctx, &pb.Domain{Domain: domain})
 	if err != nil {
 		return nil, err
@@ -48,11 +51,11 @@ func removeDomain(ctx context.Context, client pb.CounterClient, domain string) (
 	return response, nil
 }
 
-func initClient(server string) pb.CounterClient {
+func initClient() pb.CounterClient {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
-	conn, err := grpc.Dial(server, opts...)
+	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
@@ -65,23 +68,21 @@ func initClient(server string) pb.CounterClient {
 
 	return pb.NewCounterClient(conn)
 }
+
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case addDomainCommand.FullCommand():
 		log.Println("addDomainCommand")
-		client := initClient(*serverAddr)
-		log.Printf("client: %s", *serverAddr)
-		response, err := addDomain(ctx, client, *addDomainArg)
+		response, err := addDomain(ctx, *addDomainArg)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 		log.Println(response.Status)
 	case removeDomainCommand.FullCommand():
 		println("removeDomainCommand")
-		client := initClient(*serverAddr)
-		response, err := removeDomain(ctx, client, *removeDomainArg)
+		response, err := removeDomain(ctx, *removeDomainArg)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -89,8 +90,7 @@ func main() {
 
 	case statCommand.FullCommand():
 		println("statCommand")
-		client := initClient(*serverAddr)
-		response, err := getStats(ctx, client, *statArg)
+		response, err := getStats(ctx, *statArg)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}

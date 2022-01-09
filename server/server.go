@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"log"
-	"math/big"
+	"math/rand"
 	"net"
 	"strconv"
 
@@ -28,30 +27,31 @@ type Implementation struct {
 
 func (s *Implementation) AddDomain(ctx context.Context, domain *pb.Domain) (*pb.Response, error) {
 	if !keyExist(ctx, domain.GetDomain()) {
-		var index *big.Int
+		var index int
 		for {
-			index, _ := rand.Prime(rand.Reader, 64)
-			if !keyExist(ctx, index.String()) {
+			index = rangeIn()
+			if !keyExist(ctx, strconv.Itoa(index)) {
 				break
 			}
 		}
+		log.Printf("index: %d", index)
 		err := rdb.Set(ctx, domain.Domain, index, 0).Err()
 		if err != nil {
 			return nil, err
 		}
-		err = rdb.Set(ctx, index.String(), 0, 0).Err()
+		err = rdb.Set(ctx, strconv.Itoa(index), 0, 0).Err()
 		if err != nil {
 			return nil, err
 		}
 		return &pb.Response{
-			Status: index.String(),
+			Status: strconv.Itoa(index),
 		}, nil
 	}
 	index, err := getValue(ctx, domain.GetDomain())
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Response{Status: strconv.FormatInt(index, 10)}, nil
+	return &pb.Response{Status: index}, nil
 }
 
 func (s *Implementation) RemoveDomain(ctx context.Context, domain *pb.Domain) (*pb.Response, error) {
@@ -59,7 +59,7 @@ func (s *Implementation) RemoveDomain(ctx context.Context, domain *pb.Domain) (*
 	if err != nil {
 		return nil, err
 	}
-	rdb.Del(ctx, strconv.FormatInt(index, 10))
+	rdb.Del(ctx, index)
 	rdb.Del(ctx, domain.GetDomain())
 	return &pb.Response{
 		Status: `domain deleted`,
@@ -72,22 +72,44 @@ func (s *Implementation) GetStat(ctx context.Context, domain *pb.Domain) (*pb.St
 		return nil, err
 	}
 
-	val, err := getValue(ctx, strconv.FormatInt(index, 10))
+	parseInt, err := strconv.ParseInt(index, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	if domain.Domain == "any" {
+		return &pb.Stats{
+			Cnt: parseInt,
+		}, nil
+	}
+
+	val, err := getValue(ctx, index)
+	if err != nil {
+		return nil, err
+	}
+
+	valInt, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.Stats{
-		Cnt: val,
+		Cnt: valInt,
 	}, nil
 }
 
-func getValue(ctx context.Context, key string) (int64, error) {
-	val, err := rdb.Get(ctx, key).Int64()
+func getValue(ctx context.Context, key string) (string, error) {
+	val, err := rdb.Get(ctx, key).Result()
 	if err != nil {
-		return 0, fmt.Errorf("cannot get `%s` key: %v", key, err)
+		return "", fmt.Errorf("cannot get `%s` key: %v", key, err)
 	}
 	return val, nil
+}
+
+func rangeIn() int {
+	low := 10000000
+	hi := 99999999
+	return low + rand.Intn(hi-low) //nolint:gosec
 }
 
 func newCounterServer() *Implementation {
@@ -138,16 +160,17 @@ func runFiber(ctx context.Context, port int) {
 }
 
 func runGrpc(port int) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	address := fmt.Sprintf("127.0.0.1:%d", port)
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterCounterServer(grpcServer, newCounterServer())
-	log.Printf("grpc is running on port: %d", port)
-	err = grpcServer.Serve(lis)
-	if err != nil {
+	log.Printf("grpc is running on address: %s", address)
+	errServe := grpcServer.Serve(lis)
+	if errServe != nil {
 		log.Fatalf("failed to start grpc: %v", err)
 	}
 }
@@ -158,6 +181,6 @@ func main() {
 	ctx := context.Background()
 
 	initRedis(ctx)
-	go runGrpc(*portGrpc)
-	runFiber(ctx, *portFiber)
+	go runFiber(ctx, *portFiber)
+	runGrpc(*portGrpc)
 }
