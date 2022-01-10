@@ -20,8 +20,8 @@ type Redis struct {
 	Rdb *redis.Client
 }
 
-// NewRedisServer ...
-func NewRedisServer() IRedis {
+// NewRedisClient ...
+func NewRedisClient() IRedis {
 	r := Redis{
 		Rdb: redis.NewClient(&redis.Options{
 			Addr:     "localhost:6379",

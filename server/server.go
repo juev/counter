@@ -165,7 +165,7 @@ func main() {
 
 	ctx := context.Background()
 
-	rdb = NewRedisServer()
+	rdb = NewRedisClient()
 
 	if !keyExist(ctx, "any") {
 		err := rdb.Set(ctx, "any", 0).Err()
