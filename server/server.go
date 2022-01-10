@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	rdb       *redis.Client
+	rdb       *Redis
 	portGrpc  = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
 	portFiber = kingpin.Flag("http", "The HTTP port").Default("50052").Int()
 )
@@ -35,11 +35,11 @@ func (s *Implementation) AddDomain(ctx context.Context, domain *pb.Domain) (*pb.
 			}
 		}
 		log.Printf("index: %d", index)
-		err := rdb.Set(ctx, domain.Domain, index, 0).Err()
+		err := rdb.Set(ctx, domain.Domain, index).Err()
 		if err != nil {
 			return nil, err
 		}
-		err = rdb.Set(ctx, strconv.Itoa(index), 0, 0).Err()
+		err = rdb.Set(ctx, strconv.Itoa(index), 0).Err()
 		if err != nil {
 			return nil, err
 		}
@@ -116,21 +116,6 @@ func newCounterServer() *Implementation {
 	return &Implementation{}
 }
 
-func initRedis(ctx context.Context) {
-	rdb = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	if !keyExist(ctx, "any") {
-		err := rdb.Set(ctx, "any", 0, 0).Err()
-		if err != nil {
-			log.Fatalf("cannot set `any` key on redis: %v", err)
-		}
-	}
-}
-
 func keyExist(ctx context.Context, key string) bool {
 	_, err := rdb.Get(ctx, key).Result()
 	if err == nil || err != redis.Nil {
@@ -180,7 +165,15 @@ func main() {
 
 	ctx := context.Background()
 
-	initRedis(ctx)
+	rdb = NewRedisServer()
+
+	if !keyExist(ctx, "any") {
+		err := rdb.Set(ctx, "any", 0).Err()
+		if err != nil {
+			log.Fatalf("cannot set `any` key on redis: %v", err)
+		}
+	}
+
 	go runFiber(ctx, *portFiber)
 	runGrpc(*portGrpc)
 }
