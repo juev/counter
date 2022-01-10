@@ -6,10 +6,11 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-type iRedis interface {
+// IRedis ...
+type IRedis interface {
 	Get(ctx context.Context, key string) *redis.StringCmd
-	Set(ctx context.Context, key string, value string) *redis.StatusCmd
-	Del(ctx context.Context, key string) *redis.IntCmd
+	Set(ctx context.Context, key string, value interface{}) *redis.StatusCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
 	Incr(ctx context.Context, key string) *redis.IntCmd
 }
 
@@ -20,7 +21,7 @@ type Redis struct {
 }
 
 // NewRedisServer ...
-func NewRedisServer() *Redis {
+func NewRedisServer() IRedis {
 	r := Redis{
 		Rdb: redis.NewClient(&redis.Options{
 			Addr:     "localhost:6379",
