@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	rdb       *Redis
+	rdb       IRedis
 	portGrpc  = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
 	portFiber = kingpin.Flag("http", "The HTTP port").Default("50052").Int()
 )
