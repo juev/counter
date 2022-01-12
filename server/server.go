@@ -19,6 +19,7 @@ var (
 	rdb       IRedis
 	portGrpc  = kingpin.Flag("grpc", "The GRPC port").Default("50051").Int()
 	portFiber = kingpin.Flag("http", "The HTTP port").Default("50052").Int()
+	rangeIn   = func() int { return 100_000 + rand.Intn(999_999-100_000) }
 )
 
 type Implementation struct {
@@ -104,12 +105,6 @@ func getValue(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("cannot get `%s` key: %v", key, err)
 	}
 	return val, nil
-}
-
-func rangeIn() int {
-	low := 10000000
-	hi := 99999999
-	return low + rand.Intn(hi-low) //nolint:gosec
 }
 
 func newCounterServer() *Implementation {
