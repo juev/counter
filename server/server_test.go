@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/gojuno/minimock/v3"
 	"github.com/juev/counter/proto/counter"
+	"github.com/juev/counter/server/mocks"
 )
 
 func TestImplementation_AddDomain(t *testing.T) {
@@ -56,7 +57,7 @@ func TestImplementation_AddDomain(t *testing.T) {
 			expectCmdReturn.SetErr(nil)
 
 			rangeIn = func() int { return 1 }
-			rdb = NewRedisMock(mc).
+			rdb = mocks.NewRedisMock(mc).
 				GetMock.When(tt.args.ctx, "juev.org").Then(&expectCmdNil).
 				GetMock.When(tt.args.ctx, "1").Then(&expectCmdNil).
 				SetMock.When(tt.args.ctx, "juev.org", 1).Then(&expectCmdReturn).
