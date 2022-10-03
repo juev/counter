@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/gofiber/fiber/v2 v2.37.1
+	github.com/gofiber/fiber/v2 v2.38.1
 	github.com/gojuno/minimock/v3 v3.0.10
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3
 	google.golang.org/grpc v1.49.0
